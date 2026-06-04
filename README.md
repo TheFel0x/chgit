@@ -1,3 +1,5 @@
+[![Build & Test](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml/badge.svg)](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml)
+
 # chgit
 
 Quickly switch between your identities, without having to deal with git config files.
