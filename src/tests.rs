@@ -14,6 +14,7 @@ fn config_round_trips() {
             user_name: "John".to_string(),
             email: "john@example.com".to_string(),
             ssh_key: "~/.ssh/id_rsa".to_string(),
+            gpg_key: None,
         },
     );
     config
