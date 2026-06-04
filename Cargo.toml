@@ -1,6 +1,6 @@
 [package]
 name = "chgit"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2021"
 description = "Quickly manage git identities and profiles from the command line"
 license = "MIT"

@@ -1,4 +1,7 @@
 [![Build & Test](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml/badge.svg)](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml)
+[![Crates.io Version](https://img.shields.io/crates/v/chgit)](https://crates.io/crates/chgit)
+[![Build & Test Beta](https://github.com/TheFel0x/chgit/actions/workflows/rust-beta.yml/badge.svg)](https://github.com/TheFel0x/chgit/actions/workflows/rust-beta.yml)
+[![Crates.io Pre-release](https://img.shields.io/crates/v/chgit?include_prereleases&label=pre-release)](https://crates.io/crates/chgit)
 
 # chgit
 
