@@ -1,8 +1,13 @@
 [![Build & Test](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml/badge.svg)](https://github.com/TheFel0x/chgit/actions/workflows/rust.yml)
+[![Crates.io Version](https://img.shields.io/crates/v/chgit)](https://crates.io/crates/chgit)
+[![Build & Test Beta](https://github.com/TheFel0x/chgit/actions/workflows/rust-beta.yml/badge.svg)](https://github.com/TheFel0x/chgit/actions/workflows/rust-beta.yml)
+[![Crates.io Pre-release](https://img.shields.io/crates/v/chgit?include_prereleases&label=pre-release)](https://crates.io/crates/chgit)
 
 # chgit
 
 Quickly switch between your identities, without having to deal with git config files.
+
+I originally had a little script that did this but I wanted something that I can use on both Linux and Windows!
 
 ## SSH-Agent Setup
 

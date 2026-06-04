@@ -183,6 +183,7 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        // If the current path or any of its parent paths has an auto profile set, switch to it
         Command::Auto => {
             let path = std::env::current_dir().unwrap();
             let mut current_path = Some(path.as_path());
