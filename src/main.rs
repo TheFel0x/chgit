@@ -1,7 +1,13 @@
+mod git;
+mod util;
+
 use std::collections::HashMap;
 
 use clap::{Parser, Subcommand};
+use git::{apply_profile, get_git_global, get_git_local, stdio};
+
 use serde::{Deserialize, Serialize};
+use util::{censor_email, censor_name, censor_ssh_key};
 
 #[derive(Parser)]
 struct Cli {
@@ -102,14 +108,6 @@ impl Config {
     }
 }
 
-fn stdio(verbose: bool) -> std::process::Stdio {
-    if verbose {
-        std::process::Stdio::inherit()
-    } else {
-        std::process::Stdio::null()
-    }
-}
-
 fn main() {
     let cli = Cli::parse();
     let mut config = Config::load();
@@ -139,7 +137,7 @@ fn main() {
                 if cli.verbose {
                     println!("  User Name: {}", censor_name(&profile.user_name));
                     println!("  Email: {}", censor_email(&profile.email));
-                    // println!("  SSH Key: {}", profile.ssh_key);
+                    println!("  SSH Key: {}", censor_ssh_key(&profile.ssh_key));
                 }
             }
         }
@@ -279,241 +277,9 @@ fn main() {
                 .stderr(stdio(cli.verbose))
                 .status()
                 .expect("failed to run git");
-            // Call ssh-add -D to remove all keys from the agent
-            std::process::Command::new("ssh-add")
-                .arg("-D")
-                .stdout(stdio(cli.verbose))
-                .stderr(stdio(cli.verbose))
-                .status()
-                .expect("failed to run ssh-add");
         }
     }
-}
-
-fn apply_profile(profile: &Profile, verbose: bool) {
-    // Call git config
-    std::process::Command::new("git")
-        .args(["config", "--local", "user.name", &profile.user_name])
-        .stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .status()
-        .expect("failed to run git");
-    std::process::Command::new("git")
-        .args(["config", "--local", "user.email", &profile.email])
-        .stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .status()
-        .expect("failed to run git");
-    // Call ssh-add
-    std::process::Command::new("ssh-add")
-        .arg(&profile.ssh_key)
-        .stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .status()
-        .expect("failed to run ssh-add");
-}
-
-/// Check the current git local configuration and return a profile corresponding to the user.name, user.email and ssh key
-/// This happens regardless of the configuration being stored in gp or not
-fn get_git_local(verbose: bool) -> Option<Profile> {
-    // user.name
-    let user_name_output = std::process::Command::new("git")
-        .args(["config", "--local", "user.name"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run git");
-    if !user_name_output.status.success() {
-        if verbose {
-            println!("no local user.name found");
-        }
-        return None;
-    }
-    let user_name = String::from_utf8_lossy(&user_name_output.stdout)
-        .trim()
-        .to_string();
-
-    // user.email
-    let email_output = std::process::Command::new("git")
-        .args(["config", "--local", "user.email"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run git");
-    if !email_output.status.success() {
-        if verbose {
-            println!("no local user.email found");
-        }
-        return None;
-    }
-    let email = String::from_utf8_lossy(&email_output.stdout)
-        .trim()
-        .to_string();
-
-    // ssh key
-    let ssh_key_output = std::process::Command::new("ssh-add")
-        .args(["-L"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run ssh-add");
-    if !ssh_key_output.status.success() {
-        if verbose {
-            println!("no local ssh key found");
-        }
-        return None;
-    }
-    let ssh_key = String::from_utf8_lossy(&ssh_key_output.stdout)
-        .trim()
-        .to_string();
-
-    return Some(Profile {
-        user_name,
-        email,
-        ssh_key,
-    });
-}
-
-/// Fallback for CheckGitConfig command to display global if needed
-fn get_git_global(verbose: bool) -> Option<Profile> {
-    // user.name
-    let user_name_output = std::process::Command::new("git")
-        .args(["config", "--global", "user.name"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run git");
-    if !user_name_output.status.success() {
-        if verbose {
-            println!("no global user.name found");
-        }
-        return None;
-    }
-    let user_name = String::from_utf8_lossy(&user_name_output.stdout)
-        .trim()
-        .to_string();
-
-    // user.email
-    let email_output = std::process::Command::new("git")
-        .args(["config", "--global", "user.email"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run git");
-    if !email_output.status.success() {
-        if verbose {
-            println!("no global user.email found");
-        }
-        return None;
-    }
-    let email = String::from_utf8_lossy(&email_output.stdout)
-        .trim()
-        .to_string();
-
-    // ssh key
-    let ssh_key_output = std::process::Command::new("ssh-add")
-        .args(["-L"])
-        //.stdout(stdio(verbose))
-        .stderr(stdio(verbose))
-        .output()
-        .expect("failed to run ssh-add");
-    if !ssh_key_output.status.success() {
-        if verbose {
-            println!("no global ssh key found");
-        }
-        return None;
-    }
-    let ssh_key = String::from_utf8_lossy(&ssh_key_output.stdout)
-        .trim()
-        .to_string();
-
-    return Some(Profile {
-        user_name,
-        email,
-        ssh_key,
-    });
-}
-
-/// `john.doe@example.com` -> `j******e@e*****e.com`
-fn censor_email(email: &str) -> String {
-    let parts: Vec<&str> = email.split('@').collect();
-    if parts.len() != 2 {
-        return "*".repeat(email.len());
-    }
-    let local = parts[0];
-    let domain = parts[1];
-    let censored_local = if local.len() <= 2 {
-        "*".repeat(local.len())
-    } else {
-        format!(
-            "{}{}{}",
-            &local[0..1],
-            "*".repeat(local.len() - 2),
-            &local[local.len() - 1..]
-        )
-    };
-    let censored_domain = if domain.len() <= 2 {
-        "*".repeat(domain.len())
-    } else {
-        format!(
-            "{}{}{}",
-            &domain[0..1],
-            "*".repeat(domain.len() - 2),
-            &domain[domain.len() - 1..]
-        )
-    };
-    format!("{}@{}", censored_local, censored_domain)
-}
-
-/// `John Doe` -> `J***_**e`
-fn censor_name(name: &str) -> String {
-    let parts: Vec<&str> = name.split_whitespace().collect();
-    let censored_parts: Vec<String> = parts
-        .iter()
-        .map(|part| {
-            if part.len() <= 2 {
-                "*".repeat(part.len())
-            } else {
-                format!(
-                    "{}{}{}",
-                    &part[0..1],
-                    "*".repeat(part.len() - 2),
-                    &part[part.len() - 1..]
-                )
-            }
-        })
-        .collect();
-    censored_parts.join(" ")
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_round_trips() {
-        let mut config = Config {
-            profiles: HashMap::new(),
-            auto_paths: HashMap::new(),
-        };
-        config.profiles.insert(
-            "test".to_string(),
-            Profile {
-                user_name: "John".to_string(),
-                email: "john@example.com".to_string(),
-                ssh_key: "~/.ssh/id_rsa".to_string(),
-            },
-        );
-        config
-            .auto_paths
-            .insert("/home/user/projects".to_string(), "test".to_string());
-
-        let serialized = toml::to_string(&config).unwrap();
-        let deserialized: Config = toml::from_str(&serialized).unwrap();
-
-        assert_eq!(deserialized.profiles["test"].user_name, "John");
-        assert_eq!(deserialized.profiles["test"].email, "john@example.com");
-        assert_eq!(deserialized.profiles["test"].ssh_key, "~/.ssh/id_rsa");
-        assert_eq!(deserialized.auto_paths["/home/user/projects"], "test");
-    }
-}
+mod tests;
