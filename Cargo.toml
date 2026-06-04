@@ -1,7 +1,10 @@
 [package]
 name = "chgit"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Manage git identities and profiles from the command line"
+license = "MIT"
+repository = "https://github.com/TheFel0x/chgit"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

@@ -2,6 +2,8 @@
 
 Quickly switch between your identities, without having to deal with git config files.
 
+I originally had a little script that did this but I wanted something that I can use on both Linux and Windows!
+
 ## SSH-Agent Setup
 
 ### Windows
