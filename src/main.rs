@@ -40,6 +40,10 @@ enum Command {
     AddCurrent { profile_name: String },
     /// Checks the current local git configuration and prints it
     CheckGitConfig,
+    /// Shows full information about the specified profile
+    Info { profile_name: String },
+    /// Unsets local name, email and ssh key
+    Unset,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,7 +66,7 @@ impl Config {
     fn config_path() -> std::path::PathBuf {
         dirs::config_dir()
             .expect("could not find config directory")
-            .join("gp")
+            .join("chgit")
             .join("config.toml")
     }
 
@@ -132,18 +136,25 @@ fn main() {
         Command::List => {
             for (name, profile) in config.profiles {
                 println!("Profile: {name}");
-                println!("  User Name: {}", profile.user_name); // TODO: mask user name
-                println!("  Email: {}", profile.email); // TODO: mask email
-                println!("  SSH Key: {}", profile.ssh_key);
+                if cli.verbose {
+                    println!("  User Name: {}", censor_name(&profile.user_name));
+                    println!("  Email: {}", censor_email(&profile.email));
+                    // println!("  SSH Key: {}", profile.ssh_key);
+                }
             }
         }
         Command::Switch { profile_name } => {
             if let Some(profile) = config.profiles.get(&profile_name) {
                 // Call git config
-                println!("switching to profile: {profile_name}");
+                if cli.verbose {
+                    println!("switching to profile: {profile_name}");
+                }
                 apply_profile(profile, cli.verbose);
             } else {
-                println!("profile not found: {profile_name}");
+                if cli.verbose {
+                    println!("profile not found: {profile_name}");
+                }
+                std::process::exit(1);
             }
         }
         Command::SetAuto { profile_name, path } => {
@@ -157,7 +168,10 @@ fn main() {
                 config.auto_paths.insert(path, profile_name);
                 config.save();
             } else {
-                println!("profile not found: {profile_name}");
+                if cli.verbose {
+                    println!("profile not found: {profile_name}");
+                }
+                std::process::exit(1);
             }
         }
         Command::Auto => {
@@ -166,13 +180,19 @@ fn main() {
             while let Some(p) = current_path {
                 if let Some(profile_name) = config.auto_paths.get(p.to_string_lossy().as_ref()) {
                     if let Some(profile) = config.profiles.get(profile_name) {
-                        println!("auto switching to profile: {profile_name}");
+                        if cli.verbose {
+                            println!("auto switching to profile: {}", profile_name);
+                        }
                         apply_profile(profile, cli.verbose);
                         return;
                     }
                 }
                 current_path = p.parent();
             }
+            if cli.verbose {
+                println!("no auto profile found for current path");
+            }
+            std::process::exit(1);
         }
         Command::CheckProfile => {
             let active = get_git_local(cli.verbose);
@@ -189,13 +209,19 @@ fn main() {
                         return;
                     }
                 }
-                println!("active configuration not stored in gp");
+                if cli.verbose {
+                    println!("active configuration not stored in gp");
+                }
+                std::process::exit(1);
             }
         }
         Command::AddCurrent { profile_name } => {
             let active = get_git_local(cli.verbose);
             if active.is_none() {
-                println!("no active configuration found, cannot add as profile");
+                if cli.verbose {
+                    println!("no active configuration found, cannot add as profile");
+                }
+                std::process::exit(1);
             } else {
                 let profile = active.unwrap();
                 config.profiles.insert(profile_name, profile);
@@ -207,7 +233,10 @@ fn main() {
             if active.is_none() {
                 let global = get_git_global(cli.verbose);
                 if global.is_none() {
-                    println!("no active local, nor global configuration found");
+                    if cli.verbose {
+                        println!("no active local, nor global configuration found");
+                    }
+                    std::process::exit(1);
                 } else {
                     let profile = global.unwrap();
                     println!("active global configuration:");
@@ -222,6 +251,41 @@ fn main() {
                 println!("  user.email: {}", profile.email);
                 println!("  ssh key: {}", profile.ssh_key);
             }
+        }
+        Command::Info { profile_name } => {
+            if let Some(profile) = config.profiles.get(&profile_name) {
+                println!("Profile: {profile_name}");
+                println!("  User Name: {}", profile.user_name); // TODO: mask user name
+                println!("  Email: {}", profile.email); // TODO: mask email
+                println!("  SSH Key: {}", profile.ssh_key);
+            } else {
+                if cli.verbose {
+                    println!("profile not found: {profile_name}");
+                }
+                std::process::exit(1);
+            }
+        }
+        Command::Unset => {
+            // Unset local user.name, user.email and ssh key
+            std::process::Command::new("git")
+                .args(["config", "--local", "--unset", "user.name"])
+                .stdout(stdio(cli.verbose))
+                .stderr(stdio(cli.verbose))
+                .status()
+                .expect("failed to run git");
+            std::process::Command::new("git")
+                .args(["config", "--local", "--unset", "user.email"])
+                .stdout(stdio(cli.verbose))
+                .stderr(stdio(cli.verbose))
+                .status()
+                .expect("failed to run git");
+            // Call ssh-add -D to remove all keys from the agent
+            std::process::Command::new("ssh-add")
+                .arg("-D")
+                .stdout(stdio(cli.verbose))
+                .stderr(stdio(cli.verbose))
+                .status()
+                .expect("failed to run ssh-add");
         }
     }
 }
@@ -260,6 +324,9 @@ fn get_git_local(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run git");
     if !user_name_output.status.success() {
+        if verbose {
+            println!("no local user.name found");
+        }
         return None;
     }
     let user_name = String::from_utf8_lossy(&user_name_output.stdout)
@@ -274,6 +341,9 @@ fn get_git_local(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run git");
     if !email_output.status.success() {
+        if verbose {
+            println!("no local user.email found");
+        }
         return None;
     }
     let email = String::from_utf8_lossy(&email_output.stdout)
@@ -288,6 +358,9 @@ fn get_git_local(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run ssh-add");
     if !ssh_key_output.status.success() {
+        if verbose {
+            println!("no local ssh key found");
+        }
         return None;
     }
     let ssh_key = String::from_utf8_lossy(&ssh_key_output.stdout)
@@ -311,6 +384,9 @@ fn get_git_global(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run git");
     if !user_name_output.status.success() {
+        if verbose {
+            println!("no global user.name found");
+        }
         return None;
     }
     let user_name = String::from_utf8_lossy(&user_name_output.stdout)
@@ -325,6 +401,9 @@ fn get_git_global(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run git");
     if !email_output.status.success() {
+        if verbose {
+            println!("no global user.email found");
+        }
         return None;
     }
     let email = String::from_utf8_lossy(&email_output.stdout)
@@ -339,6 +418,9 @@ fn get_git_global(verbose: bool) -> Option<Profile> {
         .output()
         .expect("failed to run ssh-add");
     if !ssh_key_output.status.success() {
+        if verbose {
+            println!("no global ssh key found");
+        }
         return None;
     }
     let ssh_key = String::from_utf8_lossy(&ssh_key_output.stdout)
@@ -350,4 +432,88 @@ fn get_git_global(verbose: bool) -> Option<Profile> {
         email,
         ssh_key,
     });
+}
+
+/// `john.doe@example.com` -> `j******e@e*****e.com`
+fn censor_email(email: &str) -> String {
+    let parts: Vec<&str> = email.split('@').collect();
+    if parts.len() != 2 {
+        return "*".repeat(email.len());
+    }
+    let local = parts[0];
+    let domain = parts[1];
+    let censored_local = if local.len() <= 2 {
+        "*".repeat(local.len())
+    } else {
+        format!(
+            "{}{}{}",
+            &local[0..1],
+            "*".repeat(local.len() - 2),
+            &local[local.len() - 1..]
+        )
+    };
+    let censored_domain = if domain.len() <= 2 {
+        "*".repeat(domain.len())
+    } else {
+        format!(
+            "{}{}{}",
+            &domain[0..1],
+            "*".repeat(domain.len() - 2),
+            &domain[domain.len() - 1..]
+        )
+    };
+    format!("{}@{}", censored_local, censored_domain)
+}
+
+/// `John Doe` -> `J***_**e`
+fn censor_name(name: &str) -> String {
+    let parts: Vec<&str> = name.split_whitespace().collect();
+    let censored_parts: Vec<String> = parts
+        .iter()
+        .map(|part| {
+            if part.len() <= 2 {
+                "*".repeat(part.len())
+            } else {
+                format!(
+                    "{}{}{}",
+                    &part[0..1],
+                    "*".repeat(part.len() - 2),
+                    &part[part.len() - 1..]
+                )
+            }
+        })
+        .collect();
+    censored_parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_round_trips() {
+        let mut config = Config {
+            profiles: HashMap::new(),
+            auto_paths: HashMap::new(),
+        };
+        config.profiles.insert(
+            "test".to_string(),
+            Profile {
+                user_name: "John".to_string(),
+                email: "john@example.com".to_string(),
+                ssh_key: "~/.ssh/id_rsa".to_string(),
+            },
+        );
+        config
+            .auto_paths
+            .insert("/home/user/projects".to_string(), "test".to_string());
+
+        let serialized = toml::to_string(&config).unwrap();
+        let deserialized: Config = toml::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.profiles["test"].user_name, "John");
+        assert_eq!(deserialized.profiles["test"].email, "john@example.com");
+        assert_eq!(deserialized.profiles["test"].ssh_key, "~/.ssh/id_rsa");
+        assert_eq!(deserialized.auto_paths["/home/user/projects"], "test");
+    }
 }
