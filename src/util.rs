@@ -53,7 +53,7 @@ pub fn censor_name(name: &str) -> String {
 /// C:\Users\JohnDoe\.ssh\id_rsa -> C:\Users\J*******\.ssh\i*_**a
 /// ~/.ssh/id_rsa -> ~/.ssh/i*_**a
 /// /home/john/.ssh/id_rsa -> /home/j***/.ssh/i*_**a
-pub fn censor_ssh_key(ssh_key: &str) -> String {
+pub fn censor_key_path(ssh_key: &str) -> String {
     let parts: Vec<&str> = ssh_key.rsplitn(2, std::path::MAIN_SEPARATOR).collect();
     if parts.len() != 2 {
         return "*".repeat(ssh_key.len());
@@ -86,4 +86,18 @@ pub fn censor_ssh_key(ssh_key: &str) -> String {
         std::path::MAIN_SEPARATOR,
         censored_file_name
     )
+}
+
+/// `1234567890abcdef` -> `1**************f`
+pub fn censor_id(id: &str) -> String {
+    if id.len() <= 2 {
+        "*".repeat(id.len())
+    } else {
+        format!(
+            "{}{}{}",
+            &id[0..1],
+            "*".repeat(id.len() - 2),
+            &id[id.len() - 1..]
+        )
+    }
 }

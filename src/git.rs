@@ -22,6 +22,29 @@ pub fn apply_profile(profile: &Profile, verbose: bool) {
         .stderr(stdio(verbose))
         .status()
         .expect("failed to run git");
+    // Configure GPG signing if a key is set
+    if let Some(gpg_key) = &profile.gpg_key {
+        std::process::Command::new("git")
+            .args(["config", "--local", "user.signingkey", gpg_key])
+            .stdout(stdio(verbose))
+            .stderr(stdio(verbose))
+            .status()
+            .expect("failed to run git");
+        std::process::Command::new("git")
+            .args(["config", "--local", "commit.gpgsign", "true"])
+            .stdout(stdio(verbose))
+            .stderr(stdio(verbose))
+            .status()
+            .expect("failed to run git");
+    } else {
+        // If no GPG key is set, disable signing
+        std::process::Command::new("git")
+            .args(["config", "--local", "commit.gpgsign", "false"])
+            .stdout(stdio(verbose))
+            .stderr(stdio(verbose))
+            .status()
+            .expect("failed to run git");
+    }
     // Call ssh-add
     std::process::Command::new("ssh-add")
         .arg(&profile.ssh_key)
@@ -85,6 +108,7 @@ pub fn get_git_local(verbose: bool) -> Option<Profile> {
         user_name,
         email,
         ssh_key,
+        gpg_key: None,
     })
 }
 
@@ -142,5 +166,6 @@ pub fn get_git_global(verbose: bool) -> Option<Profile> {
         user_name,
         email,
         ssh_key,
+        gpg_key: None,
     })
 }

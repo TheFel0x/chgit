@@ -38,13 +38,15 @@ Should be the same as Linux? Not sure, I don't have a macOS machine to test this
 1. Create a new profile:
 
 ```bash
-chgit add <PROFILE_NAME> <USER_NAME> <EMAIL> <SSH_KEY>
+chgit add <PROFILE_NAME> <USER_NAME> <EMAIL> <SSH_KEY> [--gpg-key <GPG_KEY>]
 ```
 Examples:
 
 ```bash
 # Linux example
 chgit add Private "John Doe" "john.doe@example.com" "/home/john/.ssh/id_rsa_work"
+# Linux example with GPG signing
+chgit add Private "John Doe" "john.doe@example.com" "/home/john/.ssh/id_rsa_work" --gpg-key ABC1234567
 # Windows example
 chgit.exe add Private "John Doe" "john.doe@example.com" "C:\Users\John\.ssh\id_rsa_work"
 ```
@@ -80,7 +82,9 @@ chgit auto
 ## Other Commands
 
 - `chgit remove <PROFILE_NAME>`: Remove a profile.
+- `chgit info <PROFILE_NAME>`: Show full details of a profile.
 - `chgit check-profile`: Check the active profile. (if any)
 - `chgit add-current <PROFILE_NAME>`: Create a new profile with the current git config values.
 - `chgit check-git-config`: Quickly check the current git config values.
+- `chgit unset`: Unset the local git name and email.
 - `chgit help`: Show the help message.

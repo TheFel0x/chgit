@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use git::{apply_profile, get_git_global, get_git_local, stdio};
 
 use serde::{Deserialize, Serialize};
-use util::{censor_email, censor_name, censor_ssh_key};
+use util::{censor_email, censor_id, censor_key_path, censor_name};
 
 #[derive(Parser)]
 struct Cli {
@@ -26,6 +26,9 @@ enum Command {
         user_name: String,
         email: String,
         ssh_key: String,
+        /// GPG key ID or fingerprint (optional)
+        #[arg(long)]
+        gpg_key: Option<String>,
     },
     /// Remove a saved git profile
     Remove { profile_name: String },
@@ -57,6 +60,7 @@ struct Profile {
     user_name: String,
     email: String,
     ssh_key: String,
+    gpg_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,11 +122,13 @@ fn main() {
             user_name,
             email,
             ssh_key,
+            gpg_key,
         } => {
             let new_profile = Profile {
                 user_name,
                 email,
                 ssh_key,
+                gpg_key,
             };
             config.profiles.insert(profile_name, new_profile);
             config.save();
@@ -137,7 +143,12 @@ fn main() {
                 if cli.verbose {
                     println!("  User Name: {}", censor_name(&profile.user_name));
                     println!("  Email: {}", censor_email(&profile.email));
-                    println!("  SSH Key: {}", censor_ssh_key(&profile.ssh_key));
+                    println!("  SSH Key: {}", censor_key_path(&profile.ssh_key));
+                    if let Some(gpg_key) = profile.gpg_key {
+                        println!("  GPG ID: {}", censor_id(&gpg_key))
+                    } else {
+                        println!("  GPG ID: None");
+                    }
                 }
             }
         }
@@ -253,9 +264,14 @@ fn main() {
         Command::Info { profile_name } => {
             if let Some(profile) = config.profiles.get(&profile_name) {
                 println!("Profile: {profile_name}");
-                println!("  User Name: {}", profile.user_name); // TODO: mask user name
-                println!("  Email: {}", profile.email); // TODO: mask email
-                println!("  SSH Key: {}", profile.ssh_key);
+                println!("  User Name: {}", &profile.user_name);
+                println!("  Email: {}", &profile.email);
+                println!("  SSH Key: {}", &profile.ssh_key);
+                if let Some(gpg_key) = &profile.gpg_key {
+                    println!("  GPG ID: {}", gpg_key);
+                } else {
+                    println!("  GPG ID: None");
+                }
             } else {
                 if cli.verbose {
                     println!("profile not found: {profile_name}");
@@ -273,6 +289,18 @@ fn main() {
                 .expect("failed to run git");
             std::process::Command::new("git")
                 .args(["config", "--local", "--unset", "user.email"])
+                .stdout(stdio(cli.verbose))
+                .stderr(stdio(cli.verbose))
+                .status()
+                .expect("failed to run git");
+            std::process::Command::new("git")
+                .args(["config", "--local", "--unset", "user.signingkey"])
+                .stdout(stdio(cli.verbose))
+                .stderr(stdio(cli.verbose))
+                .status()
+                .expect("failed to run git");
+            std::process::Command::new("git")
+                .args(["config", "--local", "--unset", "commit.gpgsign"])
                 .stdout(stdio(cli.verbose))
                 .stderr(stdio(cli.verbose))
                 .status()
